@@ -87,6 +87,10 @@ typedef NS_ERROR_ENUM(RACSignalErrorDomain, RACSignalError) {
 /// returns YES. Completion and errors are always forwarded immediately.
 - (RACSignal<ValueType> *)throttle:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
 
+/// 拓展方法:针对事件立即响应,单次事件响应后的interval时间间隔内不响应事件;
+- (RACSignal<ValueType> *)debounce:(NSTimeInterval)interval RAC_WARN_UNUSED_RESULT;
+- (RACSignal<ValueType> *)debounce:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
+
 /// Forwards `next` and `completed` events after delaying for `interval` seconds
 /// on the current scheduler (on which the events were delivered).
 ///
@@ -633,9 +637,10 @@ typedef NS_ERROR_ENUM(RACSignalErrorDomain, RACSignalError) {
 /// predicateBlock - cannot be nil.
 - (RACSignal<NSNumber *> *)all:(BOOL (^)(id _Nullable object))predicateBlock RAC_WARN_UNUSED_RESULT;
 
+
+- (RACSignal<ValueType> *)retry:(NSInteger)retryCount delay:(NSTimeInterval)delay RAC_WARN_UNUSED_RESULT;
 /// Resubscribes to the receiving signal if an error occurs, up until it has
 /// retried the given number of times.
-///
 /// retryCount - if 0, it keeps retrying until it completes.
 - (RACSignal<ValueType> *)retry:(NSInteger)retryCount RAC_WARN_UNUSED_RESULT;
 
