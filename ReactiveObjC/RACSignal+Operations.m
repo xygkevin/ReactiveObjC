@@ -36,7 +36,7 @@ NSErrorDomain const RACSignalErrorDomain = @"RACSignalErrorDomain";
 // If the signal errors or completes, the corresponding block is invoked. If the
 // disposable passed to the block is _not_ disposed, then the signal is
 // subscribed to again.
-static RACDisposable *subscribeForever (RACSignal *signal, void (^next)(id), void (^error)(NSError *, RACDisposable *), void (^completed)(RACDisposable *)) {
+static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^next)(id), void (^error)(NSError *, RACDisposable *), void (^completed)(RACDisposable *)) {
 	next = [next copy];
 	error = [error copy];
 	completed = [completed copy];
@@ -55,14 +55,24 @@ static RACDisposable *subscribeForever (RACSignal *signal, void (^next)(id), voi
 				[compoundDisposable removeDisposable:weakSelfDisposable];
 			}
 
-			recurse();
+            if (delay <= 0) {
+                recurse();
+            } else {
+                RACScheduler *scheduler = [RACScheduler currentScheduler] ?: [RACScheduler scheduler];
+                [scheduler afterDelay:delay schedule:recurse];
+            }
 		} completed:^{
 			@autoreleasepool {
 				completed(compoundDisposable);
 				[compoundDisposable removeDisposable:weakSelfDisposable];
 			}
 
-			recurse();
+            if (delay <= 0) {
+                recurse();
+            } else {
+                RACScheduler *scheduler = [RACScheduler currentScheduler] ?: [RACScheduler scheduler];
+                [scheduler afterDelay:delay schedule:recurse];
+            }
 		}];
 
 		[selfDisposable addDisposable:subscriptionDisposable];
@@ -191,6 +201,55 @@ static RACDisposable *subscribeForever (RACSignal *signal, void (^next)(id), voi
 	}] setNameWithFormat:@"[%@] -throttle: %f valuesPassingTest:", self.name, (double)interval];
 }
 
+- (RACSignal *)debounce:(NSTimeInterval)interval {
+    return [[self debounce:interval valuesPassingTest:^(id _) {
+        return YES;
+    }] setNameWithFormat:@"[%@] -debounce: %f", self.name, (double)interval];
+}
+
+- (RACSignal *)debounce:(NSTimeInterval)interval valuesPassingTest:(nonnull BOOL (^)(id _Nullable))predicate {
+    return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
+        RACCompoundDisposable *compoundDisposable = [RACCompoundDisposable compoundDisposable];
+        RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
+        RACScheduler *scheduler = [RACScheduler scheduler];
+        
+        __block BOOL shouldWaitToNext = NO;
+        
+        RACDisposable *subscriptionDisposable = [self subscribeNext:^(id x) {
+            RACScheduler *delayScheduler = RACScheduler.currentScheduler ?: scheduler;
+            BOOL shouldDebounce = predicate(x);
+            
+            @synchronized (compoundDisposable) {
+                if (!shouldWaitToNext) {
+                    [nextDisposable.disposable dispose];
+                    shouldWaitToNext = YES;
+                    [subscriber sendNext:x];
+                } else if (!shouldDebounce) {
+                    [nextDisposable.disposable dispose];
+                    shouldWaitToNext = YES;
+                    [subscriber sendNext:x];
+                }
+               
+                if (shouldWaitToNext && (nextDisposable.disposable == nil || nextDisposable.disposable.isDisposed)) {
+                    nextDisposable.disposable = [delayScheduler afterDelay:interval schedule:^{
+                        shouldWaitToNext = NO;
+                        [nextDisposable.disposable dispose];
+                    }];
+                }
+            }
+        } error:^(NSError *error) {
+            [compoundDisposable dispose];
+            [subscriber sendError:error];
+        } completed:^{
+            shouldWaitToNext = NO;
+            [subscriber sendCompleted];
+        }];
+
+        [compoundDisposable addDisposable:subscriptionDisposable];
+        return compoundDisposable;
+    }] setNameWithFormat:@"[%@] -debounce: %f valuesPassingTest:", self.name, (double)interval];
+}
+
 - (RACSignal *)delay:(NSTimeInterval)interval {
 	return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
 		RACCompoundDisposable *disposable = [RACCompoundDisposable compoundDisposable];
@@ -224,7 +283,7 @@ static RACDisposable *subscribeForever (RACSignal *signal, void (^next)(id), voi
 
 - (RACSignal *)repeat {
 	return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
-		return subscribeForever(self,
+		return subscribeForever(self, 0,
 			^(id x) {
 				[subscriber sendNext:x];
 			},
@@ -1162,32 +1221,36 @@ static RACDisposable *subscribeForever (RACSignal *signal, void (^next)(id), voi
 	}] setNameWithFormat:@"[%@] -all:", self.name];
 }
 
-- (RACSignal *)retry:(NSInteger)retryCount {
-	return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
-		__block NSInteger currentRetryCount = 0;
-		return subscribeForever(self,
-			^(id x) {
-				[subscriber sendNext:x];
-			},
-			^(NSError *error, RACDisposable *disposable) {
-				if (retryCount == 0 || currentRetryCount < retryCount) {
-					// Resubscribe.
-					currentRetryCount++;
-					return;
-				}
+- (RACSignal *)retry:(NSInteger)retryCount delay:(NSTimeInterval)delay {
+    return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
+        __block NSInteger currentRetryCount = 0;
+        return subscribeForever(self, delay,
+            ^(id x) {
+                [subscriber sendNext:x];
+            },
+            ^(NSError *error, RACDisposable *disposable) {
+                if (retryCount == 0 || currentRetryCount < retryCount) {
+                    // Resubscribe.
+                    currentRetryCount++;
+                    return;
+                }
 
-				[disposable dispose];
-				[subscriber sendError:error];
-			},
-			^(RACDisposable *disposable) {
-				[disposable dispose];
-				[subscriber sendCompleted];
-			});
-	}] setNameWithFormat:@"[%@] -retry: %lu", self.name, (unsigned long)retryCount];
+                [disposable dispose];
+                [subscriber sendError:error];
+            },
+            ^(RACDisposable *disposable) {
+                [disposable dispose];
+                [subscriber sendCompleted];
+            });
+    }] setNameWithFormat:@"[%@] -retry: %lu delay: %f", self.name, (unsigned long)retryCount, delay];
+}
+
+- (RACSignal *)retry:(NSInteger)retryCount {
+    return [[self retry:retryCount delay:0] setNameWithFormat:@"[%@] -retry: %lu", self.name, (unsigned long)retryCount];
 }
 
 - (RACSignal *)retry {
-	return [[self retry:0] setNameWithFormat:@"[%@] -retry", self.name];
+	return [[self retry:0 delay:0] setNameWithFormat:@"[%@] -retry", self.name];
 }
 
 - (RACSignal *)sample:(RACSignal *)sampler {
