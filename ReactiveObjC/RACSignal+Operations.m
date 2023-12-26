@@ -208,6 +208,9 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
 }
 
 - (RACSignal *)debounce:(NSTimeInterval)interval valuesPassingTest:(nonnull BOOL (^)(id _Nullable))predicate {
+    NSCParameterAssert(interval >= 0);
+    NSCParameterAssert(predicate != nil);
+    
     return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
         RACCompoundDisposable *compoundDisposable = [RACCompoundDisposable compoundDisposable];
         RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
@@ -226,14 +229,13 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
                     [subscriber sendNext:x];
                 } else if (!shouldDebounce) {
                     [nextDisposable.disposable dispose];
-                    shouldWaitToNext = YES;
                     [subscriber sendNext:x];
+                    return;
                 }
                
                 if (shouldWaitToNext && (nextDisposable.disposable == nil || nextDisposable.disposable.isDisposed)) {
                     nextDisposable.disposable = [delayScheduler afterDelay:interval schedule:^{
                         shouldWaitToNext = NO;
-                        [nextDisposable.disposable dispose];
                     }];
                 }
             }
@@ -248,6 +250,58 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
         [compoundDisposable addDisposable:subscriptionDisposable];
         return compoundDisposable;
     }] setNameWithFormat:@"[%@] -debounce: %f valuesPassingTest:", self.name, (double)interval];
+}
+
+- (RACSignal *)frequency:(NSTimeInterval)interval {
+    return [[self frequency:interval valuesPassingTest:^(id _) {
+        return YES;
+    }] setNameWithFormat:@"[%@] -frequency: %f", self.name, (double)interval];
+}
+
+- (RACSignal *)frequency:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable))predicate {
+    NSCParameterAssert(interval >= 0);
+    NSCParameterAssert(predicate != nil);
+    
+    return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
+        RACCompoundDisposable *compoundDisposable = [RACCompoundDisposable compoundDisposable];
+        RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
+        RACScheduler *scheduler = [RACScheduler scheduler];
+        
+        __block BOOL shouldWaitToNext = NO;
+        RACDisposable *subscriptionDisposable = [self subscribeNext:^(id x) {
+            RACScheduler *delayScheduler = RACScheduler.currentScheduler ?: scheduler;
+            
+            BOOL shouldFrequency = predicate(x);
+            
+            @synchronized (compoundDisposable) {
+                if (!shouldWaitToNext) {
+                    [nextDisposable.disposable dispose];
+                    shouldWaitToNext = YES;
+                    [subscriber sendNext:x];
+                } else if (!shouldFrequency) {
+                    [nextDisposable.disposable dispose];
+                    [subscriber sendNext:x];
+                    return;
+                }
+               
+                if (shouldWaitToNext) {
+                    [nextDisposable.disposable dispose];
+                    nextDisposable.disposable = [delayScheduler afterDelay:interval schedule:^{
+                        shouldWaitToNext = NO;
+                    }];
+                }
+            }
+        } error:^(NSError *error) {
+            [compoundDisposable dispose];
+            [subscriber sendError:error];
+        } completed:^{
+            shouldWaitToNext = NO;
+            [subscriber sendCompleted];
+        }];
+
+        [compoundDisposable addDisposable:subscriptionDisposable];
+        return compoundDisposable;
+    }] setNameWithFormat:@"[%@] -frequency: %f valuesPassingTest:", self.name, (double)interval];
 }
 
 - (RACSignal *)delay:(NSTimeInterval)interval {
