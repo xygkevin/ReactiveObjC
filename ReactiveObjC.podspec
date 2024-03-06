@@ -15,7 +15,7 @@ Pod::Spec.new do |s|
   s.screenshots  = "https://reactivecocoa.io/img/logo.png"
   s.license      = { type: "MIT", file: "LICENSE.md" }
 
-  s.documentation_url  = "https://github.com/ReactiveCocoa/ReactiveObjC/"\
+  s.documentation_url  = "https://github.com/xygkevin/ReactiveObjC/"\
                          "tree/master/Documentation#readme"
 
   s.author             = "ReactiveCocoa"
@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
   s.watchos.deployment_target = "2.0"
   s.tvos.deployment_target    = "9.0"
 
-  s.source = { git: "https://github.com/ReactiveCocoa/ReactiveObjC.git",
+  s.source = { git: "https://github.com/xygkevin/ReactiveObjC.git",
                tag: s.version }
 
   s.source_files          = "ReactiveObjC/*.{h,m,d}",
