@@ -95,7 +95,7 @@ typedef NS_ERROR_ENUM(RACSignalErrorDomain, RACSignalError) {
 
 /// 立即发送一次 next, 然后 interval 秒内不再接收新的 next, 且 interval 内有新的 next 那么等待 interval 将被重置,默认需要节流，即predicate始终为YES
 - (RACSignal<ValueType> *)frequency:(NSTimeInterval)interval RAC_WARN_UNUSED_RESULT;
-/// 立即发送一次 next, 然后 interval 秒内不再接收新的 next, 且 interval 内有新的 next 那么等待 interval 将被重置,predicate用来判断是否需要节流
+/// 立即发送一次 next, 然后 interval 秒内不再接收新的 next, 且 interval 内有新的 next 那么之前的 interval 将被重置, predicate用来判断是否需要节流
 - (RACSignal<ValueType> *)frequency:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
 
 /// Forwards `next` and `completed` events after delaying for `interval` seconds
