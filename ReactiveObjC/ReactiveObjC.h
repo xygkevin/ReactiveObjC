@@ -71,6 +71,7 @@ FOUNDATION_EXPORT const unsigned char ReactiveObjCVersionString[];
 	#import <ReactiveObjC/UISegmentedControl+RACSignalSupport.h>
 	#import <ReactiveObjC/UITableViewCell+RACSignalSupport.h>
 	#import <ReactiveObjC/UITableViewHeaderFooterView+RACSignalSupport.h>
+    #import <ReactiveObjC/UITextField+RACCommandSupport.h>
 	#import <ReactiveObjC/UITextField+RACSignalSupport.h>
 	#import <ReactiveObjC/UITextView+RACSignalSupport.h>
 

@@ -26,7 +26,7 @@
 #import "RACSubscriber.h"
 #import "RACTuple.h"
 #import "RACUnit.h"
-#import <libkern/OSAtomic.h>
+#import <stdatomic.h>
 #import <objc/runtime.h>
 
 NSErrorDomain const RACSignalErrorDomain = @"RACSignalErrorDomain";
@@ -162,10 +162,12 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
 		void (^flushNext)(BOOL send) = ^(BOOL send) {
 			@synchronized (compoundDisposable) {
 				[nextDisposable.disposable dispose];
-
-				if (!hasNextValue) return;
-				if (send) [subscriber sendNext:nextValue];
-
+				if (!hasNextValue) {
+					return;
+				}
+				if (send) {
+					[subscriber sendNext:nextValue];
+				}
 				nextValue = nil;
 				hasNextValue = NO;
 			}
@@ -177,11 +179,12 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
 
 			@synchronized (compoundDisposable) {
 				flushNext(NO);
+				
 				if (!shouldThrottle) {
 					[subscriber sendNext:x];
 					return;
 				}
-
+				
 				nextValue = x;
 				hasNextValue = YES;
 				nextDisposable.disposable = [delayScheduler afterDelay:interval schedule:^{
@@ -213,10 +216,10 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
     
     return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
         RACCompoundDisposable *compoundDisposable = [RACCompoundDisposable compoundDisposable];
-        RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
         RACScheduler *scheduler = [RACScheduler scheduler];
         
         __block BOOL shouldWaitToNext = NO;
+		RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
         
         RACDisposable *subscriptionDisposable = [self subscribeNext:^(id x) {
             RACScheduler *delayScheduler = RACScheduler.currentScheduler ?: scheduler;
@@ -264,10 +267,10 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
     
     return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
         RACCompoundDisposable *compoundDisposable = [RACCompoundDisposable compoundDisposable];
-        RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
         RACScheduler *scheduler = [RACScheduler scheduler];
         
         __block BOOL shouldWaitToNext = NO;
+		RACSerialDisposable *nextDisposable = [[RACSerialDisposable alloc] init];
         RACDisposable *subscriptionDisposable = [self subscribeNext:^(id x) {
             RACScheduler *delayScheduler = RACScheduler.currentScheduler ?: scheduler;
             
@@ -759,7 +762,7 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
 
 	// Purposely not retaining 'object', since we want to tear down the binding
 	// when it deallocates normally.
-	__block void * volatile objectPtr = (__bridge void *)object;
+	__block _Atomic(void *) objectPtr = (__bridge void *)object;
 
 	RACDisposable *subscriptionDisposable = [self subscribeNext:^(id x) {
 		// Possibly spec, possibly compiler bug, but this __bridge cast does not
@@ -811,7 +814,7 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
 
 		while (YES) {
 			void *ptr = objectPtr;
-			if (OSAtomicCompareAndSwapPtrBarrier(ptr, NULL, &objectPtr)) {
+			if (atomic_compare_exchange_strong(&objectPtr, &ptr, NULL)) {
 				break;
 			}
 		}
@@ -1161,17 +1164,17 @@ static RACDisposable *subscribeForever (RACSignal *signal, double delay, void (^
 
 - (RACSignal *)deliverOnMainThread {
 	return [[RACSignal createSignal:^(id<RACSubscriber> subscriber) {
-		__block volatile int32_t queueLength = 0;
+		__block atomic_int queueLength = 0;
 		
 		void (^performOnMainThread)(dispatch_block_t) = ^(dispatch_block_t block) {
-			int32_t queued = OSAtomicIncrement32(&queueLength);
+			int32_t queued = atomic_fetch_add(&queueLength, 1) + 1;
 			if (NSThread.isMainThread && queued == 1) {
 				block();
-				OSAtomicDecrement32(&queueLength);
+				atomic_fetch_sub(&queueLength, 1);
 			} else {
 				dispatch_async(dispatch_get_main_queue(), ^{
 					block();
-					OSAtomicDecrement32(&queueLength);
+					atomic_fetch_sub(&queueLength, 1);
 				});
 			}
 		};
