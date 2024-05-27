@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Sets the command for the text field's return key. When the return key is clicked, the command is
 /// executed with the sender of the event. The text field's enabledness is bound
 /// to the command's `canExecute`.
-@property (nonatomic, strong, nullable) RACCommand<__kindof UITextField *, id> *
+@property (nonatomic, strong, nullable) RACCommand<__kindof UITextField *, id> *rac_returnCommand;
 
 @end
 
