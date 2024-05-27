@@ -48,55 +48,24 @@ typedef NS_ERROR_ENUM(RACSignalErrorDomain, RACSignalError) {
 /// into the signal.
 - (RACSignal<ValueType> *)doCompleted:(void (^)(void))block RAC_WARN_UNUSED_RESULT;
 
-/// Sends `next`s only if we don't receive another `next` in `interval` seconds.
-///
-/// If a `next` is received, and then another `next` is received before
-/// `interval` seconds have passed, the first value is discarded.
-///
-/// After `interval` seconds have passed since the most recent `next` was sent,
-/// the most recent `next` is forwarded on the scheduler that the value was
-/// originally received on. If +[RACScheduler currentScheduler] was nil at the
-/// time, a private background scheduler is used.
-///
-/// Returns a signal which sends throttled and delayed `next` events. Completion
-/// and errors are always forwarded immediately.
+/// 节流:常用于UIButton点击控制
+/// 首次接收到sendNext的值之后会立即发送出去,然后等待interval时间后继续接收新的sendNext的值,interval期间的值会全部忽略,默认predicate函数返回YES;
 - (RACSignal<ValueType> *)throttle:(NSTimeInterval)interval RAC_WARN_UNUSED_RESULT;
-
-/// Throttles `next`s for which `predicate` returns YES.
-///
-/// When `predicate` returns YES for a `next`:
-///
-///  1. If another `next` is received before `interval` seconds have passed, the
-///     prior value is discarded. This happens regardless of whether the new
-///     value will be throttled.
-///  2. After `interval` seconds have passed since the value was originally
-///     received, it will be forwarded on the scheduler that it was received
-///     upon. If +[RACScheduler currentScheduler] was nil at the time, a private
-///     background scheduler is used.
-///
-/// When `predicate` returns NO for a `next`, it is forwarded immediately,
-/// without any throttling.
-///
-/// interval  - The number of seconds for which to buffer the latest value that
-///             passes `predicate`.
-/// predicate - Passed each `next` from the receiver, this block returns
-///             whether the given value should be throttled. This argument must
-///             not be nil.
-///
-/// Returns a signal which sends `next` events, throttled when `predicate`
-/// returns YES. Completion and errors are always forwarded immediately.
+/// 首次接收到sendNext的值之后会立即发送出去,然后等待interval时间后继续接收新的sendNext的值,interval期间的值会全部忽略,通过predicate函数控制是否启用throttle节流;
 - (RACSignal<ValueType> *)throttle:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
 
-
-/// 立即发送一次 next, 然后 interval 秒内不再接收新的 next,默认需要节流，即predicate始终为YES
+/// 防抖:常用于UITextFiled输入关联网络请求
+/// 只有在interval期间不再接收到新的sendNext的值才会将最新的值发送出去,默认predicate函数返回YES;
 - (RACSignal<ValueType> *)debounce:(NSTimeInterval)interval RAC_WARN_UNUSED_RESULT;
-/// 立即发送一次 next, 然后 interval 秒内不再接收新的 next, predicate用来判断是否需要节流
+/// 只有在interval期间不再接收到新的sendNext的值才会将最新的值发送出去,通过predicate函数控制是否启用throttle防抖;
 - (RACSignal<ValueType> *)debounce:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
 
-/// 立即发送一次 next, 然后 interval 秒内不再接收新的 next, 且 interval 内有新的 next 那么等待 interval 将被重置,默认需要节流，即predicate始终为YES
+/// 频控:防止连续的高频次的触发,与throttle的区别就在于会重置等待时间,与debounce的区别是会首次sentNext会立即发送一次
+/// 首次接收到sendNext的值之后会立即发送出去,然后等待interval时间后继续接收新的sendNext的值，interval期间如果有新的即sendNext的值,则重置interval等待时间,默认predicate函数返回YES;
 - (RACSignal<ValueType> *)frequency:(NSTimeInterval)interval RAC_WARN_UNUSED_RESULT;
-/// 立即发送一次 next, 然后 interval 秒内不再接收新的 next, 且 interval 内有新的 next 那么之前的 interval 将被重置, predicate用来判断是否需要节流
+/// 首次接收到sendNext的值之后会立即发送出去,然后等待interval时间后继续接收新的sendNext的值，interval期间如果有新的即sendNext的值,则重置interval等待时间,通过predicate函数控制是否启用frequency频控;
 - (RACSignal<ValueType> *)frequency:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
+
 
 /// Forwards `next` and `completed` events after delaying for `interval` seconds
 /// on the current scheduler (on which the events were delivered).
