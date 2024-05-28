@@ -60,7 +60,7 @@ typedef NS_ERROR_ENUM(RACSignalErrorDomain, RACSignalError) {
 /// 只有在interval期间不再接收到新的sendNext的值才会将最新的值发送出去,通过predicate函数控制是否启用throttle防抖;
 - (RACSignal<ValueType> *)debounce:(NSTimeInterval)interval valuesPassingTest:(BOOL (^)(id _Nullable next))predicate RAC_WARN_UNUSED_RESULT;
 
-/// 频控:防止连续的高频次的触发,与throttle的区别就在于会重置等待时间,与debounce的区别是会首次sentNext会立即发送一次
+/// 频控:防止连续的高频次的触发;与throttle的区别就在于会重置等待时间;与debounce的区别是首次接收到sentNext的值会立即发送一次,且会忽略掉等待时间内所有的sendNext的值
 /// 首次接收到sendNext的值之后会立即发送出去,然后等待interval时间后继续接收新的sendNext的值，interval期间如果有新的即sendNext的值,则重置interval等待时间,默认predicate函数返回YES;
 - (RACSignal<ValueType> *)frequency:(NSTimeInterval)interval RAC_WARN_UNUSED_RESULT;
 /// 首次接收到sendNext的值之后会立即发送出去,然后等待interval时间后继续接收新的sendNext的值，interval期间如果有新的即sendNext的值,则重置interval等待时间,通过predicate函数控制是否启用frequency频控;
